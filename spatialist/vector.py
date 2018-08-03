@@ -274,27 +274,29 @@ class Vector(object):
 
         srs_out = crsConvert(projection, 'osr')
 
-        # create the CoordinateTransformation
-        coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
+        if self.srs.IsSame(srs_out) == 0:
 
-        layername = self.layername
-        geomType = self.geomType
-        features = self.getfeatures()
-        feat_def = features[0].GetDefnRef()
-        fields = [feat_def.GetFieldDefn(x) for x in range(0, feat_def.GetFieldCount())]
+            # create the CoordinateTransformation
+            coordTrans = osr.CoordinateTransformation(self.srs, srs_out)
 
-        self.__init__()
-        self.addlayer(layername, srs_out, geomType)
-        self.layer.CreateFields(fields)
+            layername = self.layername
+            geomType = self.geomType
+            features = self.getfeatures()
+            feat_def = features[0].GetDefnRef()
+            fields = [feat_def.GetFieldDefn(x) for x in range(0, feat_def.GetFieldCount())]
 
-        for feature in features:
-            geom = feature.GetGeometryRef()
-            geom.Transform(coordTrans)
-            newfeature = feature.Clone()
-            newfeature.SetGeometry(geom)
-            self.layer.CreateFeature(newfeature)
-            newfeature = None
-        self.init_features()
+            self.__init__()
+            self.addlayer(layername, srs_out, geomType)
+            self.layer.CreateFields(fields)
+
+            for feature in features:
+                geom = feature.GetGeometryRef()
+                geom.Transform(coordTrans)
+                newfeature = feature.Clone()
+                newfeature.SetGeometry(geom)
+                self.layer.CreateFeature(newfeature)
+                newfeature = None
+            self.init_features()
 
     def setCRS(self, crs):
         """
@@ -345,7 +347,7 @@ class Vector(object):
             if overwrite:
                 driver.DeleteDataSource(outfile)
             else:
-                raise IOError("file already exists")
+                raise RuntimeError('target file already exists')
 
         outdataset = driver.CreateDataSource(outfile)
         outlayer = outdataset.CreateLayer(self.layername, geom_type=self.geomType)
@@ -358,17 +360,18 @@ class Vector(object):
         for feature in self.layer:
             outFeature = ogr.Feature(outlayerdef)
             outFeature.SetGeometry(feature.GetGeometryRef())
-            for j in range(0, self.nfields):
-                outFeature.SetField(self.fieldnames[j], feature.GetField(j))
+            for name in self.fieldnames:
+                outFeature.SetField(name, feature.GetField(name))
             # add the feature to the shapefile
             outlayer.CreateFeature(outFeature)
             outFeature = None
         self.layer.ResetReading()
 
-        srs_out = self.srs.Clone()
-        srs_out.MorphToESRI()
-        with open(os.path.join(outfilepath, basename+".prj"), "w") as prj:
-            prj.write(srs_out.ExportToWkt())
+        if format == 'ESRI Shapefile':
+            srs_out = self.srs.Clone()
+            srs_out.MorphToESRI()
+            with open(os.path.join(outfilepath, basename+'.prj'), 'w') as prj:
+                prj.write(srs_out.ExportToWkt())
 
         outdataset = None
 
@@ -450,23 +453,76 @@ def centerdist(obj1, obj2):
 
 
 def intersect(obj1, obj2):
+    """
+    intersect two Vector objects
+    Parameters
+    ----------
+    obj1: Vector
+        the first vector geometry
+    obj2: Vector
+        the second vector geometry
+
+    Returns
+    -------
+    Vector
+        the intersect of obj1 and obj2
+    """
     if not isinstance(obj1, Vector) or not isinstance(obj2, Vector):
         raise RuntimeError('both objects must be of type Vector')
 
-    if obj1.nfeatures > 1 or obj2.nfeatures > 1:
-        raise RuntimeError('only objects with one feature are currently supported')
-
     obj1.reproject(obj2.srs)
 
-    feature1 = obj1.getFeatureByIndex(0)
-    geometry1 = feature1.GetGeometryRef()
+    #######################################################
+    # create basic overlap
+    union1 = ogr.Geometry(ogr.wkbMultiPolygon)
+    # union all the geometrical features of layer 1
+    for feat in obj1.layer:
+        union1.AddGeometry(feat.GetGeometryRef())
+    obj1.layer.ResetReading()
+    union1.Simplify(0)
+    # same for layer2
+    union2 = ogr.Geometry(ogr.wkbMultiPolygon)
+    for feat in obj2.layer:
+        union2.AddGeometry(feat.GetGeometryRef())
+    obj2.layer.ResetReading()
+    union2.Simplify(0)
+    # intersection
+    intersect_base = union1.Intersection(union2)
+    union1 = None
+    union2 = None
+    #######################################################
+    # compute detailed per-geometry overlaps
+    if intersect_base.GetArea() > 0:
+        intersection = Vector(driver='Memory')
+        intersection.addlayer('intersect', obj1.srs, ogr.wkbPolygon)
+        fieldmap = []
+        for index, fielddef in enumerate([obj1.fieldDefs, obj2.fieldDefs]):
+            for field in fielddef:
+                name = field.GetName()
+                i = 2
+                while name in intersection.fieldnames:
+                    name = '{}_{}'.format(field.GetName(), i)
+                    i += 1
+                fieldmap.append((index, field.GetName(), name))
+                intersection.addfield(name, type=field.GetType(), width=field.GetWidth())
 
-    feature2 = obj2.getFeatureByIndex(0)
-    geometry2 = feature2.GetGeometryRef()
-
-    intersect = geometry2.Intersection(geometry1)
-
-    return intersect if intersect.GetArea() > 0 else None
+        for feature1 in obj1.layer:
+            geom1 = feature1.GetGeometryRef()
+            if geom1.Intersects(intersect_base):
+                for feature2 in obj2.layer:
+                    geom2 = feature2.GetGeometryRef()
+                    # select only the intersections
+                    if geom2.Intersects(intersect_base):
+                        intersect = geom2.Intersection(geom1)
+                        fields = {}
+                        for item in fieldmap:
+                            if item[0] == 0:
+                                fields[item[2]] = feature1.GetField(item[1])
+                            else:
+                                fields[item[2]] = feature2.GetField(item[1])
+                        intersection.addfeature(intersect, fields)
+        intersect_base = None
+        return intersection
 
 
 def dissolve(infile, outfile, field, layername=None):

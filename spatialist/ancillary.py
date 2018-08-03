@@ -24,7 +24,6 @@ import inspect
 import itertools
 import os
 import subprocess as sp
-from datetime import datetime
 
 try:
     import pathos.multiprocessing as mp
@@ -116,40 +115,6 @@ def finder(folder, matchlist, foldermode=0, regex=False, recursive=True):
         return list(itertools.chain(*groups))
     else:
         raise TypeError("parameter 'folder' must be of type str or list")
-
-
-def groupbyTime(images, function, time):
-    """
-    function to group images by their acquisition time difference
-
-    Parameters
-    ----------
-    images: list of str
-        a list of image names
-    function: function
-        a function to derive the time from the image names
-    time: int or float
-        a time difference in seconds by which to group the images
-
-    Returns
-    -------
-    list
-        a list of sub-lists containing the grouped images
-    """
-    # sort images by time stamp
-    srcfiles = sorted(images, key=function)
-
-    groups = [[srcfiles[0]]]
-    group = groups[0]
-
-    for i in range(1, len(srcfiles)):
-        item = srcfiles[i]
-        if 0 < abs(function(item) - function(group[-1])) <= time:
-            group.append(item)
-        else:
-            groups.append([item])
-            group = groups[-1]
-    return [x[0] if len(x) == 1 else x for x in groups]
 
 
 def multicore(function, cores, multiargs, **singleargs):
@@ -247,8 +212,15 @@ def parse_literal(x):
     """
     return the smallest possible data type for a string
 
-    :param x: a string to be parsed
-    :return a value of type int, float or str
+    Parameters
+    ----------
+    x: str
+        a string to be parsed
+
+    Returns
+    -------
+    int, float or str
+        the parsing result
     """
     if isinstance(x, list):
         return [parse_literal(y) for y in x]
@@ -261,7 +233,7 @@ def parse_literal(x):
             except ValueError:
                 return x
     else:
-        raise IOError('input must be a string or a list of strings')
+        raise TypeError('input must be a string or a list of strings')
 
 
 class Queue(object):
@@ -339,28 +311,38 @@ class Stack(object):
         else:
             self.stack = [inlist]
 
-    # check whether stack is empty
     def empty(self):
+        """
+        check whether stack is empty
+        """
         return len(self.stack) == 0
 
-    # empty the stack
     def flush(self):
+        """
+        empty the stack
+        """
         self.stack = []
 
-    # print the length of the stack
     def length(self):
+        """
+        get the length of the stack
+        """
         return len(self.stack)
 
-    # append items to the stack; input can be a single value or a list
     def push(self, x):
+        """
+        append items to the stack; input can be a single value or a list
+        """
         if isinstance(x, list):
             for item in x:
                 self.stack.append(item)
         else:
             self.stack.append(x)
 
-    # return the last stack element and delete it fro mthe list
     def pop(self):
+        """
+        return the last stack element and delete it from the list
+        """
         if not self.empty():
             val = self.stack[-1]
             del self.stack[-1]
@@ -382,24 +364,25 @@ def urlQueryParser(url, querydict):
     return urlunparse(address_parse._replace(query=urlencode(querydict)))
 
 
-def which(program):
+def which(program, mode=os.F_OK | os.X_OK):
     """
     mimics UNIX's which
     taken from this post: http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
     can be replaced by shutil.which() in Python 3.3
     """
 
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+    def is_exe(fpath, mode):
+        return os.path.isfile(fpath) and os.access(fpath, mode)
 
     fpath, fname = os.path.split(program)
     if fpath:
-        if is_exe(program):
+        if is_exe(program, mode):
             return program
     else:
-        for path in os.environ['PATH'].split(os.pathsep):
+        for path in os.environ['PATH'].split(os.path.pathsep):
             path = path.strip('"')
-            exe_file = os.path.join(path, program)
-            if is_exe(exe_file):
-                return exe_file
+            exe_files = [os.path.join(path, program), os.path.join(path, program + '.exe')]
+            for exe_file in exe_files:
+                if is_exe(exe_file, mode):
+                    return exe_file
     return None

@@ -1,11 +1,16 @@
 # spatialist
+[![Linux Build Status][1]][2] [![Windows Build status][3]][4] [![Coverage Status][5]][6] [![Documentation Status][7]][8] [![Binder][9]][10] [![PyPI version][12]][13]
+
 ### A Python module for spatial data handling
 
-This package is currently being extracted from the [pyroSAR](https://github.com/johntruckenbrodt/pyroSAR) project.
+This package offers functionalities for user-friendly geo data processing using GDAL and OGR.
 
-This software used to run on a local server and is currently being restructured into a Python package.
-Not everything is working properly, stay tuned...
+### Documentation
+A description of spatialist's functionality can be found [here][8].
 
+### Tutorial
+We are currently developing a tutorial jupyter notebook [spatialist_tutorial.ipynb][11]. 
+You can interactively use it by launching binder on the top.
 
 ### Installation of dependencies
 If you are using Windows, the easiest way to work with spatialist and Python in general is by using 
@@ -68,15 +73,36 @@ from pysqlite2 import dbapi2 as sqlite3
 Installing this package is likely to cause problems with the sqlite3 library installed on the system. 
 Thus, it is safer to build a static sqlite3 library for it (see installation script).
 ### Installation of spatialist
-For the installation we need the Python tool pip and the version control system git. On Windows pip is 
-installed together with Anaconda, git can be downloaded from [here](https://git-scm.com/downloads).
-On Linux you can easily install both via command line:
-```sh
-sudo apt-get install python-pip
-sudo apt-get install git
+For the installation we need the Python tool pip and the version control system git. On Windows, pip is 
+installed together with Anaconda. Git can be installed like this:
+```bash
+conda install git
 ```
-Once everything is set up, spatialist is ready to be installed:
+On Linux:
 ```sh
-sudo pip install git+https://github.com/johntruckenbrodt/spatialist.git
+sudo apt-get install python-pip git
+```
+Once everything is set up, spatialist is ready to be installed. You can install stable releases like this:
+```bash
+python -m pip install spatialist
+```
+or the latest developer version like this:
+```sh
+sudo python -m pip install git+https://github.com/johntruckenbrodt/spatialist.git
 ```
 On Windows you need to use the Anaconda Prompt and leave out `sudo` in the above command.
+
+
+[1]: https://www.travis-ci.org/johntruckenbrodt/spatialist.svg?branch=master
+[2]: https://www.travis-ci.org/johntruckenbrodt/spatialist
+[3]: https://ci.appveyor.com/api/projects/status/3nxj2nnmp21ig860?svg=true
+[4]: https://ci.appveyor.com/project/johntruckenbrodt/spatialist
+[5]: https://coveralls.io/repos/github/johntruckenbrodt/spatialist/badge.svg?branch=master
+[6]: https://coveralls.io/github/johntruckenbrodt/spatialist?branch=master
+[7]: https://readthedocs.org/projects/spatialist/badge/?version=latest
+[8]: https://spatialist.readthedocs.io/en/latest/?badge=latest
+[9]: https://mybinder.org/badge.svg
+[10]: https://mybinder.org/v2/gh/johntruckenbrodt/spatialist/master?filepath=spatialist_tutorial.ipynb
+[11]: https://github.com/johntruckenbrodt/spatialist/blob/master/spatialist_tutorial.ipynb
+[12]: https://badge.fury.io/py/spatialist.svg
+[13]: https://badge.fury.io/py/spatialist

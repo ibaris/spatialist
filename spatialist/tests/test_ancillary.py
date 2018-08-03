@@ -21,7 +21,7 @@ def test_dictmerge():
 
 def test_parse_literal():
     assert anc.parse_literal(['1', '2.2', 'a']) == [1, 2.2, 'a']
-    with pytest.raises(IOError):
+    with pytest.raises(TypeError):
         anc.parse_literal(1)
 
 
@@ -36,22 +36,28 @@ def test_run(tmpdir, testdata):
 
 
 def test_which():
-    program = anc.which('gdalinfo')
+    env = os.environ['PATH']
+    os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, os.path.dirname(os.__file__))
+    program = anc.which(os.__file__, os.F_OK)
     assert os.path.isfile(program)
-    assert anc.which(program) == program
+    assert anc.which(program, os.F_OK) == program
     assert anc.which('foobar') is None
+    os.environ['PATH'] = env
 
 
 def test_multicore():
     add = lambda x, y, z: x + y + z
     assert anc.multicore(add, cores=2, multiargs={'x': [1, 2]}, y=5, z=9) == [15, 16]
     assert anc.multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6]}, z=9) == [15, 17]
+    # unknown argument in multiargs
     with pytest.raises(AttributeError):
         anc.multicore(add, cores=2, multiargs={'foobar': [1, 2]}, y=5, z=9)
+    # unknown argument in single args
     with pytest.raises(AttributeError):
         anc.multicore(add, cores=2, multiargs={'x': [1, 2]}, y=5, foobar=9)
+    # multiarg values of different length
     with pytest.raises(AttributeError):
-        anc.multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6, 7]}, foobar=9)
+        anc.multicore(add, cores=2, multiargs={'x': [1, 2], 'y': [5, 6, 7]}, z=9)
 
 
 def test_finder(tmpdir):
@@ -98,3 +104,7 @@ def test_Stack():
     st.flush()
     assert st.empty() is True
 
+
+def test_urlQueryParser():
+    assert anc.urlQueryParser('www.somepage.foo', {'foo': 'bar', 'page': 1}) in ['www.somepage.foo?foo=bar&page=1',
+                                                                                 'www.somepage.foo?page=1&foo=bar']

@@ -1,5 +1,6 @@
 import os
 import re
+import platform
 
 from ctypes.util import find_library
 
@@ -31,7 +32,14 @@ except RuntimeError:
 
 def sqlite_setup(driver=':memory:', extensions=None):
     """
-    setup a sqlite3 connection and load extensions to it
+    Setup a sqlite3 connection and load extensions to it.
+    This function intends to simplify the process of loading extensions to `sqlite3`, which can be quite difficult
+    depending on the version used.
+    Particularly loading `spatialite` has caused quite some trouble. In recent distributions of Ubuntu this has
+    become much easier due to a new apt package `libsqlite3-mod-spatialite`. For use in Windows, `spatialist` comes
+    with its own `spatialite` DLL distribution.
+    See `here <https://www.gaia-gis.it/fossil/libspatialite/wiki?name=mod_spatialite>`_ for more details on loading
+    `spatialite` as an `sqlite3` extension.
 
     Parameters
     ----------
@@ -44,6 +52,11 @@ def sqlite_setup(driver=':memory:', extensions=None):
     -------
     sqlite3.Connection
         the database connection
+
+    Example
+    -------
+    >>> from spatialist.sqlite_util import sqlite_setup
+    >>> conn = sqlite_setup(extensions=['spatialite'])
     """
     conn = __Handler(driver, extensions)
     return conn.conn
@@ -78,20 +91,31 @@ class __Handler(object):
     def get_tablenames(self):
         cursor = self.conn.cursor()
         cursor.execute('SELECT * FROM sqlite_master WHERE type="table"')
-        return [x[1].encode('ascii') for x in cursor.fetchall()]
+        names = [x[1] for x in cursor.fetchall()]
+        if bool(type('unicode')):
+            names = [str(x) for x in names]
+        return names
 
     def load_extension(self, extension):
         if re.search('spatialite', extension):
+            if platform.system() == 'Windows':
+                ext_path = os.path.join(os.path.expanduser('~'), '.spatialist', 'mod_spatialite')
+                print('mod_spatialite ext_path exists? {}'.format(os.path.isdir(ext_path)))
+                file_exists = os.path.isfile(os.path.join(ext_path, 'mod_spatialite.dll'))
+                print('mod_spatialite.dll exists? {}'.format(file_exists))
+                print('appending to PATH: {}'.format(ext_path))
+                os.environ['PATH'] = '{}{}{}'.format(os.environ['PATH'], os.path.pathsep, ext_path)
             select = None
             # first try to load the dedicated mod_spatialite adapter
-            for option in ['mod_spatialite', 'mod_spatialite.so']:
+            for option in ['mod_spatialite', 'mod_spatialite.so', 'mod_spatialite.dll']:
                 try:
                     self.conn.load_extension(option)
                     select = option
                     self.extensions.append(option)
                     print('loading extension {0} as {1}'.format(extension, option))
                     break
-                except sqlite3.OperationalError:
+                except sqlite3.OperationalError as e:
+                    print('{0}: {1}'.format(option, str(e)))
                     continue
 
             # if loading mod_spatialite fails try to load libspatialite directly
